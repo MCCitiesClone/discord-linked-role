@@ -18,29 +18,53 @@ app.get('/admin/metadata-schema', (c) => {
 });
 
 app.post('/admin/metadata-schema', async (c) => {
+  const requestId = getRequestId(c);
+  const startedAt = Date.now();
+
+  console.info(`[${requestId}] Metadata schema registration form submitted`, {
+    path: new URL(c.req.url).pathname,
+    method: c.req.method,
+    userAgent: c.req.header('user-agent'),
+    hasAdminSecretConfigured: Boolean(config.REGISTER_ADMIN_SECRET),
+  });
+
   try {
     if (!config.REGISTER_ADMIN_SECRET) {
+      console.error(`[${requestId}] Metadata schema registration blocked: REGISTER_ADMIN_SECRET is not configured`);
       return c.html(renderMetadataSchemaPage({
         error: 'REGISTER_ADMIN_SECRET is not configured.',
       }), 503);
     }
 
+    console.info(`[${requestId}] Parsing metadata schema registration form body`);
     const body = await c.req.parseBody();
     const adminSecret = body.adminSecret;
 
     if (typeof adminSecret !== 'string' || adminSecret !== config.REGISTER_ADMIN_SECRET) {
+      console.warn(`[${requestId}] Metadata schema registration rejected: invalid admin key`, {
+        adminSecretType: typeof adminSecret,
+        elapsedMs: Date.now() - startedAt,
+      });
       return c.html(renderMetadataSchemaPage({
         error: 'Invalid admin key.',
       }), 403);
     }
 
-    const result = await discord.registerMetadataSchema();
+    console.info(`[${requestId}] Admin key accepted; calling Discord metadata schema API`);
+    const result = await discord.registerMetadataSchema({ requestId });
+    console.info(`[${requestId}] Metadata schema registration page completed`, {
+      elapsedMs: Date.now() - startedAt,
+    });
+
     return c.html(renderMetadataSchemaPage({
       result,
       success: 'Metadata schema registered with Discord.',
     }));
   } catch (e) {
-    console.error(e);
+    console.error(`[${requestId}] Metadata schema registration page failed`, {
+      elapsedMs: Date.now() - startedAt,
+      error: formatUnknownError(e),
+    });
     return c.html(renderMetadataSchemaPage({
       error: e instanceof Error ? e.message : 'Internal Server Error',
     }), 500);
@@ -154,6 +178,12 @@ function getRedirectUri(c: Context) {
   const redirectUri = `${proto}://${host}/discord-oauth-callback`;
   console.warn(`DISCORD_REDIRECT_URI is not set; using request-derived redirect URI: ${redirectUri}`);
   return redirectUri;
+}
+
+function getRequestId(c: Context) {
+  return c.req.header('x-vercel-id')
+    ?? c.req.header('x-request-id')
+    ?? `schema-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function renderMetadataSchemaPage(options: {
@@ -373,6 +403,18 @@ function escapeHtml(value: string) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function formatUnknownError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return error;
 }
 
 export { updateMetadata };

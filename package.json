@@ -4,7 +4,7 @@
   "private": "true",
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": "24.x"
   },
   "description": "A very simple example of a Linked Role bot for Discord.",
   "main": "src/server.ts",

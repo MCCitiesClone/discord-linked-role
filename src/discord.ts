@@ -42,6 +42,13 @@ type MetadataSchemaRecord = {
   type: number;
 };
 
+type RegisterMetadataSchemaOptions = {
+  requestId?: string;
+  timeoutMs?: number;
+};
+
+const defaultDiscordRequestTimeoutMs = 15_000;
+
 export const metadataSchema: MetadataSchemaRecord[] = [
   {
     key: 'cookieseaten',
@@ -67,7 +74,10 @@ export const metadataSchema: MetadataSchemaRecord[] = [
  * Register the metadata schema that guild admins can use in linked role rules.
  * This uses the bot token and should only be exposed to trusted operators.
  */
-export async function registerMetadataSchema() {
+export async function registerMetadataSchema(options: RegisterMetadataSchemaOptions = {}) {
+  const requestId = options.requestId ?? 'register-schema';
+  const timeoutMs = options.timeoutMs ?? defaultDiscordRequestTimeoutMs;
+  const startedAt = Date.now();
   const missing: string[] = [];
 
   if (!config.DISCORD_CLIENT_ID) {
@@ -78,25 +88,83 @@ export async function registerMetadataSchema() {
   }
 
   if (missing.length > 0) {
+    console.error(`[${requestId}] Discord metadata schema registration configuration is incomplete`, {
+      missing,
+    });
     throw new Error(`Missing required Discord registration configuration: ${missing.join(', ')}`);
   }
 
   const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/role-connections/metadata`;
-  const response = await fetch(url, {
-    method: 'PUT',
-    body: JSON.stringify(metadataSchema),
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bot ${config.DISCORD_TOKEN}`,
-    },
+  const payload = JSON.stringify(metadataSchema);
+
+  console.info(`[${requestId}] Registering Discord metadata schema`, {
+    applicationId: config.DISCORD_CLIENT_ID,
+    schemaKeys: metadataSchema.map((record) => record.key),
+    timeoutMs,
+  });
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'PUT',
+      body: payload,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bot ${config.DISCORD_TOKEN}`,
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const elapsedMs = Date.now() - startedAt;
+    console.error(`[${requestId}] Discord metadata schema request failed before receiving a response`, {
+      elapsedMs,
+      error: formatUnknownError(error),
+    });
+
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new Error(`Timed out registering Discord metadata schema after ${timeoutMs}ms`);
+    }
+
+    throw error;
+  }
+
+  const elapsedMs = Date.now() - startedAt;
+  console.info(`[${requestId}] Discord metadata schema response received`, {
+    elapsedMs,
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
   });
 
   if (!response.ok) {
     const body = await response.text();
+    console.error(`[${requestId}] Discord metadata schema registration was rejected`, {
+      elapsedMs,
+      status: response.status,
+      statusText: response.statusText,
+      responseBodyLength: body.length,
+      responseBody: body,
+    });
     throw new Error(`Error pushing discord metadata schema: [${response.status}] ${response.statusText}: ${body}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.info(`[${requestId}] Discord metadata schema registration completed`, {
+    elapsedMs: Date.now() - startedAt,
+  });
+  return data;
+}
+
+function formatUnknownError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return error;
 }
 
 export function getOAuthUrl(redirectUri = config.DISCORD_REDIRECT_URI) {
