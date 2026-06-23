@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/linked-role",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/discord-oauth-callback",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/update-metadata",
+      "destination": "/api/index"
+    }
+  ]
+}

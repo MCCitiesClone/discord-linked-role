@@ -13,8 +13,12 @@ All of the files for the project are on the left-hand side. Here's a quick glimp
 │   ├── config.js   -> Parsing of local configuration
 │   ├── discord.js  -> Discord specific auth & API wrapper
 │   ├── register.js -> Tool to register the metadata schema
-│   ├── server.js   -> Main entry point for the application
+│   ├── app.js      -> Express application shared by local and Vercel runtimes
+│   ├── server.js   -> Local development entry point
 │   ├── storage.js  -> Provider for storing OAuth2 tokens
+├── api
+│   ├── index.js    -> Vercel Serverless Function entry point
+├── vercel.json     -> Routes public paths to the Vercel function
 ├── .env -> your credentials and IDs
 ├── .gitignore
 ├── package.json
@@ -50,7 +54,11 @@ DISCORD_CLIENT_SECRET: <your OAuth2 client secret>
 DISCORD_TOKEN: <your bot token>
 DISCORD_REDIRECT_URI: https://<your-project-url>/discord-oauth-callback
 COOKIE_SECRET: <random generated UUID>
+UPSTASH_REDIS_REST_URL: <your Upstash Redis REST URL>
+UPSTASH_REDIS_REST_TOKEN: <your Upstash Redis REST token>
 ```
+
+The app also accepts the legacy Vercel KV variable names (`KV_REST_API_URL` and `KV_REST_API_TOKEN`) if your Vercel integration provides those instead.
 
 For the UUID (`COOKIE_SECRET`), you can run the following commands:
 
@@ -68,13 +76,40 @@ Fetching credentials is covered in detail in the [linked roles tutorial](https:/
 After your credentials are added, you can run your app:
 
 ```
-$ node server.js
+$ npm run dev
 ```
 
 And, just once, you need to register you connection metadata schema. In a new window, run:
 
 ```
-$ node src/register.js
+$ npm run register
+```
+
+## Deploying to Vercel
+
+This project runs on Vercel as a Node.js Serverless Function. The Express app is exported from `api/index.js`, and `vercel.json` rewrites the public app routes to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix.
+
+1. Create or connect a Vercel project for this repository.
+2. Add a Redis integration from the Vercel Marketplace, or use an existing Upstash Redis database.
+3. Add these environment variables in Vercel:
+
+```
+DISCORD_CLIENT_ID=<your OAuth2 client Id>
+DISCORD_CLIENT_SECRET=<your OAuth2 client secret>
+DISCORD_TOKEN=<your bot token>
+DISCORD_REDIRECT_URI=https://<your-vercel-domain>/discord-oauth-callback
+COOKIE_SECRET=<random generated UUID>
+UPSTASH_REDIS_REST_URL=<your Upstash Redis REST URL>
+UPSTASH_REDIS_REST_TOKEN=<your Upstash Redis REST token>
+```
+
+4. In the Discord Developer Portal, set the Linked Roles Verification URL to `https://<your-vercel-domain>/linked-role`.
+5. In the OAuth2 settings, add `https://<your-vercel-domain>/discord-oauth-callback` as a redirect URI.
+6. Deploy the project. No build command is required.
+7. Run the metadata registration once with the same environment variables available:
+
+```
+npm run register
 ```
 
 ### Set up interactivity
