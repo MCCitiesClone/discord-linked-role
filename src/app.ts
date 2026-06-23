@@ -36,9 +36,18 @@ app.post('/admin/metadata-schema', async (c) => {
       }), 503);
     }
 
-    console.info(`[${requestId}] Parsing metadata schema registration form body`);
-    const body = await c.req.parseBody();
-    const adminSecret = body.adminSecret;
+    const contentType = c.req.header('content-type') ?? '';
+    console.info(`[${requestId}] Parsing metadata schema registration form body`, {
+      contentType,
+      contentLength: c.req.header('content-length'),
+    });
+    const body = await parseUrlEncodedForm(c);
+    const adminSecret = body.get('adminSecret');
+
+    console.info(`[${requestId}] Metadata schema registration form body parsed`, {
+      hasAdminSecret: typeof adminSecret === 'string',
+      elapsedMs: Date.now() - startedAt,
+    });
 
     if (typeof adminSecret !== 'string' || adminSecret !== config.REGISTER_ADMIN_SECRET) {
       console.warn(`[${requestId}] Metadata schema registration rejected: invalid admin key`, {
@@ -184,6 +193,15 @@ function getRequestId(c: Context) {
   return c.req.header('x-vercel-id')
     ?? c.req.header('x-request-id')
     ?? `schema-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function parseUrlEncodedForm(c: Context) {
+  const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+  if (!contentType.startsWith('application/x-www-form-urlencoded')) {
+    throw new Error('Unsupported form content type.');
+  }
+
+  return new URLSearchParams(await c.req.text());
 }
 
 function renderMetadataSchemaPage(options: {
