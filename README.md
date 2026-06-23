@@ -10,14 +10,14 @@ All of the files for the project are on the left-hand side. Here's a quick glimp
 ```
 ├── assets          -> Images used in this tutorial
 ├── src
-│   ├── config.js   -> Parsing of local configuration
-│   ├── discord.js  -> Discord specific auth & API wrapper
-│   ├── register.js -> Tool to register the metadata schema
-│   ├── app.js      -> Express application shared by local and Vercel runtimes
-│   ├── server.js   -> Local development entry point
-│   ├── storage.js  -> Provider for storing OAuth2 tokens
+│   ├── config.ts   -> Parsing of local configuration
+│   ├── discord.ts  -> Discord specific auth & API wrapper
+│   ├── register.ts -> Tool to register the metadata schema
+│   ├── app.ts      -> Hono application shared by local and Vercel runtimes
+│   ├── server.ts   -> Local development entry point
+│   ├── storage.ts  -> Provider for storing OAuth2 tokens
 ├── api
-│   ├── index.js    -> Vercel Serverless Function entry point
+│   ├── index.ts    -> Vercel Serverless Function entry point
 ├── vercel.json     -> Routes public paths to the Vercel function
 ├── .env -> your credentials and IDs
 ├── .gitignore
@@ -87,7 +87,7 @@ $ npm run register
 
 ## Deploying to Vercel
 
-This project runs on Vercel as a Node.js Serverless Function. The Express app is exported from `api/index.js`, and `vercel.json` rewrites the public app routes to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix.
+This project runs on Vercel as a Node.js Serverless Function. The Hono app is exported through `api/index.ts`, and `vercel.json` rewrites the public app routes to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix.
 
 1. Create or connect a Vercel project for this repository.
 2. Add a Redis integration from the Vercel Marketplace, or use an existing Upstash Redis database.

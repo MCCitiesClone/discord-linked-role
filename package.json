@@ -7,20 +7,31 @@
     "node": ">=18"
   },
   "description": "A very simple example of a Linked Role bot for Discord.",
-  "main": "src/server.js",
+  "main": "src/server.ts",
   "scripts": {
-    "dev": "node src/server.js",
-    "register": "node src/register.js",
-    "start": "node src/server.js",
+    "build": "tsc --noEmit",
+    "dev": "tsx src/server.ts",
+    "register": "tsx src/register.ts",
+    "start": "tsx src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "Justin Beckwith <justin.beckwith@discordapp.com>",
+  "author": "Evan Sizemore <evan@wool.homes>",
   "license": "MIT",
   "dependencies": {
+    "@hono/node-server": "^1.13.8",
     "@upstash/redis": "^1.38.0",
-    "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.2",
-    "express": "^4.21.2"
+    "hono": "^4.6.16"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "aube": {
+    "allowBuilds": {
+      "esbuild": true
+    }
   }
 }

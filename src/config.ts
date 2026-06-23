@@ -1,10 +1,10 @@
-import * as dotenv from 'dotenv'
+import * as dotenv from 'dotenv';
 
 /**
  * Load environment variables from a .env file, if it exists.
  */
 
-dotenv.config()
+dotenv.config();
 
 const config = {
   DISCORD_TOKEN: process.env.DISCORD_TOKEN,

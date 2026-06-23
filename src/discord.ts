@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 
 import * as storage from './storage.js';
+import type { DiscordTokens } from './storage.js';
 import config from './config.js';
 
 /**
@@ -16,14 +17,32 @@ import config from './config.js';
  * Generate the url which the user will be directed to in order to approve the
  * bot, and see the list of requested scopes.
  */
+type OAuthTokensResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+};
+
+type DiscordUserData = {
+  user: {
+    id: string;
+  };
+};
+
+type Metadata = {
+  cookieseaten: number;
+  allergictonuts: number;
+  bakingsince: string;
+};
+
 export function getOAuthUrl(redirectUri = config.DISCORD_REDIRECT_URI) {
-  assertOAuthConfig({ redirectUri });
+  const oauthConfig = getOAuthConfig(redirectUri);
 
   const state = crypto.randomUUID();
 
   const url = new URL('https://discord.com/api/oauth2/authorize');
-  url.searchParams.set('client_id', config.DISCORD_CLIENT_ID);
-  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('client_id', oauthConfig.clientId);
+  url.searchParams.set('redirect_uri', oauthConfig.redirectUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('state', state);
   url.searchParams.set('scope', 'role_connections.write identify');
@@ -35,16 +54,20 @@ export function getOAuthUrl(redirectUri = config.DISCORD_REDIRECT_URI) {
  * Given an OAuth2 code from the scope approval page, make a request to Discord's
  * OAuth2 service to retrieve an access token, refresh token, and expiration.
  */
-export async function getOAuthTokens(code, redirectUri = config.DISCORD_REDIRECT_URI) {
-  assertOAuthConfig({ redirectUri });
+export async function getOAuthTokens(code: string | undefined, redirectUri = config.DISCORD_REDIRECT_URI) {
+  if (!code) {
+    throw new Error('Missing Discord OAuth code.');
+  }
+
+  const oauthConfig = getOAuthConfig(redirectUri);
 
   const url = 'https://discord.com/api/v10/oauth2/token';
   const body = new URLSearchParams({
-    client_id: config.DISCORD_CLIENT_ID,
-    client_secret: config.DISCORD_CLIENT_SECRET,
+    client_id: oauthConfig.clientId,
+    client_secret: oauthConfig.clientSecret,
     grant_type: 'authorization_code',
     code,
-    redirect_uri: redirectUri,
+    redirect_uri: oauthConfig.redirectUri,
   });
 
   const response = await fetch(url, {
@@ -55,22 +78,17 @@ export async function getOAuthTokens(code, redirectUri = config.DISCORD_REDIRECT
     },
   });
   if (response.ok) {
-    const data = await response.json();
+    const data = await response.json() as OAuthTokensResponse;
     return data;
   } else {
     throw new Error(`Error fetching OAuth tokens: [${response.status}] ${response.statusText}`);
   }
 }
 
-function assertOAuthConfig({ redirectUri }) {
-  const missing = [];
+function getOAuthConfig(redirectUri: string | undefined) {
+  const clientCredentials = getClientCredentials();
+  const missing: string[] = [];
 
-  if (!config.DISCORD_CLIENT_ID) {
-    missing.push('DISCORD_CLIENT_ID');
-  }
-  if (!config.DISCORD_CLIENT_SECRET) {
-    missing.push('DISCORD_CLIENT_SECRET');
-  }
   if (!redirectUri) {
     missing.push('DISCORD_REDIRECT_URI');
   }
@@ -78,6 +96,36 @@ function assertOAuthConfig({ redirectUri }) {
   if (missing.length > 0) {
     throw new Error(`Missing required Discord OAuth configuration: ${missing.join(', ')}`);
   }
+
+  const verifiedRedirectUri = redirectUri as string;
+
+  return {
+    ...clientCredentials,
+    redirectUri: verifiedRedirectUri,
+  };
+}
+
+function getClientCredentials() {
+  const missing: string[] = [];
+
+  if (!config.DISCORD_CLIENT_ID) {
+    missing.push('DISCORD_CLIENT_ID');
+  }
+  if (!config.DISCORD_CLIENT_SECRET) {
+    missing.push('DISCORD_CLIENT_SECRET');
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required Discord OAuth configuration: ${missing.join(', ')}`);
+  }
+
+  return {
+    clientId: config.DISCORD_CLIENT_ID,
+    clientSecret: config.DISCORD_CLIENT_SECRET,
+  } as {
+    clientId: string;
+    clientSecret: string;
+  };
 }
 
 /**
@@ -85,12 +133,13 @@ function assertOAuthConfig({ redirectUri }) {
  * token.  Check if the access token has expired, and if it has, use the
  * refresh token to acquire a new, fresh access token.
  */
-export async function getAccessToken(userId, tokens) {
+export async function getAccessToken(userId: string, tokens: DiscordTokens) {
   if (Date.now() > tokens.expires_at) {
+    const clientCredentials = getClientCredentials();
     const url = 'https://discord.com/api/v10/oauth2/token';
     const body = new URLSearchParams({
-      client_id: config.DISCORD_CLIENT_ID,
-      client_secret: config.DISCORD_CLIENT_SECRET,
+      client_id: clientCredentials.clientId,
+      client_secret: clientCredentials.clientSecret,
       grant_type: 'refresh_token',
       refresh_token: tokens.refresh_token,
     });
@@ -102,7 +151,7 @@ export async function getAccessToken(userId, tokens) {
       },
     });
     if (response.ok) {
-      const tokens = await response.json();
+      const tokens = await response.json() as OAuthTokensResponse & { expires_at: number };
       tokens.expires_at = Date.now() + tokens.expires_in * 1000;
       await storage.storeDiscordTokens(userId, tokens);
       return tokens.access_token;
@@ -116,7 +165,7 @@ export async function getAccessToken(userId, tokens) {
 /**
  * Given a user based access token, fetch profile information for the current user.
  */
-export async function getUserData(tokens) {
+export async function getUserData(tokens: OAuthTokensResponse) {
   const url = 'https://discord.com/api/v10/oauth2/@me';
   const response = await fetch(url, {
     headers: {
@@ -124,7 +173,7 @@ export async function getUserData(tokens) {
     },
   });
   if (response.ok) {
-    const data = await response.json();
+    const data = await response.json() as DiscordUserData;
     return data;
   } else {
     throw new Error(`Error fetching user data: [${response.status}] ${response.statusText}`);
@@ -135,7 +184,7 @@ export async function getUserData(tokens) {
  * Given metadata that matches the schema, push that data to Discord on behalf
  * of the current user.
  */
-export async function pushMetadata(userId, tokens, metadata) {
+export async function pushMetadata(userId: string, tokens: DiscordTokens, metadata: Metadata) {
   // PUT /users/@me/applications/:id/role-connection
   const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
   const accessToken = await getAccessToken(userId, tokens);
@@ -160,7 +209,7 @@ export async function pushMetadata(userId, tokens, metadata) {
  * Fetch the metadata currently pushed to Discord for the currently logged
  * in user, for this specific bot.
  */
-export async function getMetadata(userId, tokens) {
+export async function getMetadata(userId: string, tokens: DiscordTokens) {
   // GET /users/@me/applications/:id/role-connection
   const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
   const accessToken = await getAccessToken(userId, tokens);

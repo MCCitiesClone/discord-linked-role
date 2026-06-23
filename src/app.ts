@@ -1,56 +1,51 @@
-import express from 'express';
-import cookieParser from 'cookie-parser';
+import { Hono } from 'hono';
+import type { Context } from 'hono';
+import { getSignedCookie, setSignedCookie } from 'hono/cookie';
 
 import config from './config.js';
 import * as discord from './discord.js';
 import * as storage from './storage.js';
 
-const app = express();
+const app = new Hono();
 
-app.use(express.json());
-app.use(cookieParser(config.COOKIE_SECRET));
-
-app.get('/', (req, res) => {
-  res.send('OK');
-});
+app.get('/', (c) => c.text('OK'));
 
 /**
  * Route configured in the Discord developer console which facilitates the
  * connection between Discord and any additional services you may use.
  */
-app.get('/linked-role', async (req, res) => {
+app.get('/linked-role', async (c) => {
   try {
-    const redirectUri = getRedirectUri(req);
+    const redirectUri = getRedirectUri(c);
     const { url, state } = discord.getOAuthUrl(redirectUri);
 
-    res.cookie('clientState', state, {
+    await setSignedCookie(c, 'clientState', state, config.COOKIE_SECRET ?? '', {
       httpOnly: true,
-      maxAge: 1000 * 60 * 5,
+      maxAge: 60 * 5,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
-      signed: true,
     });
 
-    res.redirect(url);
+    return c.redirect(url);
   } catch (e) {
     console.error(e);
-    res.sendStatus(500);
+    return c.text('Internal Server Error', 500);
   }
 });
 
 /**
  * Route configured in the Discord developer console as the OAuth2 redirect URL.
  */
-app.get('/discord-oauth-callback', async (req, res) => {
+app.get('/discord-oauth-callback', async (c) => {
   try {
-    const redirectUri = getRedirectUri(req);
-    const code = req.query.code;
-    const discordState = req.query.state;
+    const redirectUri = getRedirectUri(c);
+    const code = c.req.query('code');
+    const discordState = c.req.query('state');
 
-    const { clientState } = req.signedCookies;
+    const clientState = await getSignedCookie(c, config.COOKIE_SECRET ?? '', 'clientState');
     if (!clientState || clientState !== discordState) {
       console.error('State verification failed.');
-      return res.sendStatus(403);
+      return c.text('Forbidden', 403);
     }
 
     const tokens = await discord.getOAuthTokens(code, redirectUri);
@@ -65,32 +60,32 @@ app.get('/discord-oauth-callback', async (req, res) => {
 
     await updateMetadata(userId);
 
-    res.send('You did it! Now go back to Discord.');
+    return c.text('You did it! Now go back to Discord.');
   } catch (e) {
     console.error(e);
-    res.sendStatus(500);
+    return c.text('Internal Server Error', 500);
   }
 });
 
 /**
  * Example route that would be invoked when an external data source changes.
  */
-app.post('/update-metadata', async (req, res) => {
+app.post('/update-metadata', async (c) => {
   try {
-    const { userId } = req.body ?? {};
+    const { userId } = await c.req.json<{ userId?: string }>().catch((): { userId?: string } => ({}));
     if (!userId) {
-      return res.status(400).send('Missing userId');
+      return c.text('Missing userId', 400);
     }
 
     await updateMetadata(userId);
-    res.sendStatus(204);
+    return c.body(null, 204);
   } catch (e) {
     console.error(e);
-    res.sendStatus(500);
+    return c.text('Internal Server Error', 500);
   }
 });
 
-async function updateMetadata(userId) {
+async function updateMetadata(userId: string) {
   const tokens = await storage.getDiscordTokens(userId);
   if (!tokens) {
     throw new Error(`No stored Discord tokens for user ${userId}`);
@@ -105,14 +100,15 @@ async function updateMetadata(userId) {
   await discord.pushMetadata(userId, tokens, metadata);
 }
 
-function getRedirectUri(req) {
+function getRedirectUri(c: Context) {
   if (config.DISCORD_REDIRECT_URI) {
     return config.DISCORD_REDIRECT_URI;
   }
 
-  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const proto = forwardedProto || req.protocol;
-  const host = req.get('host');
+  const requestUrl = new URL(c.req.url);
+  const forwardedProto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim();
+  const proto = forwardedProto || requestUrl.protocol.replace(':', '');
+  const host = c.req.header('host');
 
   if (!host) {
     throw new Error('Unable to build Discord redirect URI: request host is missing.');
