@@ -1,21 +1,27 @@
 {
   "version": 2,
-  "rewrites": [
+  "builds": [
     {
-      "source": "/",
-      "destination": "/api/index"
+      "src": "api/index.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/api/index.ts"
     },
     {
-      "source": "/linked-role",
-      "destination": "/api/index"
+      "src": "/linked-role",
+      "dest": "/api/index.ts"
     },
     {
-      "source": "/discord-oauth-callback",
-      "destination": "/api/index"
+      "src": "/discord-oauth-callback",
+      "dest": "/api/index.ts"
     },
     {
-      "source": "/update-metadata",
-      "destination": "/api/index"
+      "src": "/update-metadata",
+      "dest": "/api/index.ts"
     }
   ]
 }

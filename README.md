@@ -87,7 +87,7 @@ $ npm run register
 
 ## Deploying to Vercel
 
-This project runs on Vercel as a Node.js Serverless Function. The Hono app is exported through `api/index.ts`, and `vercel.json` rewrites the public app routes to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix.
+This project runs on Vercel as a Node.js Serverless Function. The Hono app is exported through `api/index.ts`, and `vercel.json` routes the public app paths to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix.
 
 1. Create or connect a Vercel project for this repository.
 2. Add a Redis integration from the Vercel Marketplace, or use an existing Upstash Redis database.
