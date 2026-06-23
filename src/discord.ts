@@ -47,7 +47,7 @@ type RegisterMetadataSchemaOptions = {
   timeoutMs?: number;
 };
 
-const defaultDiscordRequestTimeoutMs = 15_000;
+const defaultDiscordRequestTimeoutMs = 8_000;
 
 export const metadataSchema: MetadataSchemaRecord[] = [
   {

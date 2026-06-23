@@ -7,6 +7,7 @@ import * as discord from './discord.js';
 import * as storage from './storage.js';
 
 const app = new Hono();
+const formBodyTimeoutMs = 3_000;
 
 app.get('/', (c) => c.text('OK'));
 
@@ -76,7 +77,7 @@ app.post('/admin/metadata-schema', async (c) => {
     });
     return c.html(renderMetadataSchemaPage({
       error: e instanceof Error ? e.message : 'Internal Server Error',
-    }), 500);
+    }), isTimeoutError(e) ? 504 : 500);
   }
 });
 
@@ -201,7 +202,33 @@ async function parseUrlEncodedForm(c: Context) {
     throw new Error('Unsupported form content type.');
   }
 
-  return new URLSearchParams(await c.req.text());
+  const body = await withTimeout(
+    c.req.text(),
+    formBodyTimeoutMs,
+    `Timed out reading metadata schema form body after ${formBodyTimeoutMs}ms`,
+  );
+  return new URLSearchParams(body);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
+function isTimeoutError(error: unknown) {
+  return error instanceof Error
+    && (error.name === 'TimeoutError' || error.message.startsWith('Timed out '));
 }
 
 function renderMetadataSchemaPage(options: {
