@@ -22,6 +22,10 @@
     {
       "src": "/update-metadata",
       "dest": "/api/index.ts"
+    },
+    {
+      "src": "/admin/metadata-schema",
+      "dest": "/api/index.ts"
     }
   ]
 }

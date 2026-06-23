@@ -90,7 +90,7 @@ You can also register it from the running web app. Set `REGISTER_ADMIN_SECRET` i
 
 ## Deploying to Vercel
 
-This project runs on Vercel as a Node.js Serverless Function. The Hono app is exported through `api/index.ts`, and `vercel.json` routes the public app paths to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix.
+This project runs on Vercel as a Node.js Serverless Function. The Hono app is exported through `api/index.ts`, and `vercel.json` routes the public app paths to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix. The same routing file also exposes `/admin/metadata-schema` for browser-based schema registration.
 
 1. Create or connect a Vercel project for this repository.
 2. Add a Redis integration from the Vercel Marketplace, or use an existing Upstash Redis database.
