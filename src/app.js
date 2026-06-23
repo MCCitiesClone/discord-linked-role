@@ -19,17 +19,23 @@ app.get('/', (req, res) => {
  * connection between Discord and any additional services you may use.
  */
 app.get('/linked-role', async (req, res) => {
-  const { url, state } = discord.getOAuthUrl();
+  try {
+    const redirectUri = getRedirectUri(req);
+    const { url, state } = discord.getOAuthUrl(redirectUri);
 
-  res.cookie('clientState', state, {
-    httpOnly: true,
-    maxAge: 1000 * 60 * 5,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    signed: true,
-  });
+    res.cookie('clientState', state, {
+      httpOnly: true,
+      maxAge: 1000 * 60 * 5,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      signed: true,
+    });
 
-  res.redirect(url);
+    res.redirect(url);
+  } catch (e) {
+    console.error(e);
+    res.sendStatus(500);
+  }
 });
 
 /**
@@ -37,6 +43,7 @@ app.get('/linked-role', async (req, res) => {
  */
 app.get('/discord-oauth-callback', async (req, res) => {
   try {
+    const redirectUri = getRedirectUri(req);
     const code = req.query.code;
     const discordState = req.query.state;
 
@@ -46,7 +53,7 @@ app.get('/discord-oauth-callback', async (req, res) => {
       return res.sendStatus(403);
     }
 
-    const tokens = await discord.getOAuthTokens(code);
+    const tokens = await discord.getOAuthTokens(code, redirectUri);
     const meData = await discord.getUserData(tokens);
     const userId = meData.user.id;
 
@@ -96,6 +103,24 @@ async function updateMetadata(userId) {
   };
 
   await discord.pushMetadata(userId, tokens, metadata);
+}
+
+function getRedirectUri(req) {
+  if (config.DISCORD_REDIRECT_URI) {
+    return config.DISCORD_REDIRECT_URI;
+  }
+
+  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const proto = forwardedProto || req.protocol;
+  const host = req.get('host');
+
+  if (!host) {
+    throw new Error('Unable to build Discord redirect URI: request host is missing.');
+  }
+
+  const redirectUri = `${proto}://${host}/discord-oauth-callback`;
+  console.warn(`DISCORD_REDIRECT_URI is not set; using request-derived redirect URI: ${redirectUri}`);
+  return redirectUri;
 }
 
 export { updateMetadata };

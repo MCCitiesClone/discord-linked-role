@@ -16,12 +16,14 @@ import config from './config.js';
  * Generate the url which the user will be directed to in order to approve the
  * bot, and see the list of requested scopes.
  */
-export function getOAuthUrl() {
+export function getOAuthUrl(redirectUri = config.DISCORD_REDIRECT_URI) {
+  assertOAuthConfig({ redirectUri });
+
   const state = crypto.randomUUID();
 
   const url = new URL('https://discord.com/api/oauth2/authorize');
   url.searchParams.set('client_id', config.DISCORD_CLIENT_ID);
-  url.searchParams.set('redirect_uri', config.DISCORD_REDIRECT_URI);
+  url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('state', state);
   url.searchParams.set('scope', 'role_connections.write identify');
@@ -33,14 +35,16 @@ export function getOAuthUrl() {
  * Given an OAuth2 code from the scope approval page, make a request to Discord's
  * OAuth2 service to retrieve an access token, refresh token, and expiration.
  */
-export async function getOAuthTokens(code) {
+export async function getOAuthTokens(code, redirectUri = config.DISCORD_REDIRECT_URI) {
+  assertOAuthConfig({ redirectUri });
+
   const url = 'https://discord.com/api/v10/oauth2/token';
   const body = new URLSearchParams({
     client_id: config.DISCORD_CLIENT_ID,
     client_secret: config.DISCORD_CLIENT_SECRET,
     grant_type: 'authorization_code',
     code,
-    redirect_uri: config.DISCORD_REDIRECT_URI,
+    redirect_uri: redirectUri,
   });
 
   const response = await fetch(url, {
@@ -55,6 +59,24 @@ export async function getOAuthTokens(code) {
     return data;
   } else {
     throw new Error(`Error fetching OAuth tokens: [${response.status}] ${response.statusText}`);
+  }
+}
+
+function assertOAuthConfig({ redirectUri }) {
+  const missing = [];
+
+  if (!config.DISCORD_CLIENT_ID) {
+    missing.push('DISCORD_CLIENT_ID');
+  }
+  if (!config.DISCORD_CLIENT_SECRET) {
+    missing.push('DISCORD_CLIENT_SECRET');
+  }
+  if (!redirectUri) {
+    missing.push('DISCORD_REDIRECT_URI');
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required Discord OAuth configuration: ${missing.join(', ')}`);
   }
 }
 
