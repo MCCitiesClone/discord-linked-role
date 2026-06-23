@@ -35,6 +35,70 @@ type Metadata = {
   bakingsince: string;
 };
 
+type MetadataSchemaRecord = {
+  key: string;
+  name: string;
+  description: string;
+  type: number;
+};
+
+export const metadataSchema: MetadataSchemaRecord[] = [
+  {
+    key: 'cookieseaten',
+    name: 'Cookies Eaten',
+    description: 'Cookies Eaten Greater Than',
+    type: 2,
+  },
+  {
+    key: 'allergictonuts',
+    name: 'Allergic To Nuts',
+    description: 'Is Allergic To Nuts',
+    type: 7,
+  },
+  {
+    key: 'bakingsince',
+    name: 'Baking Since',
+    description: 'Days since baking their first cookie',
+    type: 6,
+  },
+];
+
+/**
+ * Register the metadata schema that guild admins can use in linked role rules.
+ * This uses the bot token and should only be exposed to trusted operators.
+ */
+export async function registerMetadataSchema() {
+  const missing: string[] = [];
+
+  if (!config.DISCORD_CLIENT_ID) {
+    missing.push('DISCORD_CLIENT_ID');
+  }
+  if (!config.DISCORD_TOKEN) {
+    missing.push('DISCORD_TOKEN');
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required Discord registration configuration: ${missing.join(', ')}`);
+  }
+
+  const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/role-connections/metadata`;
+  const response = await fetch(url, {
+    method: 'PUT',
+    body: JSON.stringify(metadataSchema),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bot ${config.DISCORD_TOKEN}`,
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Error pushing discord metadata schema: [${response.status}] ${response.statusText}: ${body}`);
+  }
+
+  return response.json();
+}
+
 export function getOAuthUrl(redirectUri = config.DISCORD_REDIRECT_URI) {
   const oauthConfig = getOAuthConfig(redirectUri);
 

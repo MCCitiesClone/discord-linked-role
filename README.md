@@ -54,6 +54,7 @@ DISCORD_CLIENT_SECRET: <your OAuth2 client secret>
 DISCORD_TOKEN: <your bot token>
 DISCORD_REDIRECT_URI: https://<your-project-url>/discord-oauth-callback
 COOKIE_SECRET: <random generated UUID>
+REGISTER_ADMIN_SECRET: <random admin key for browser-based metadata registration>
 UPSTASH_REDIS_REST_URL: <your Upstash Redis REST URL>
 UPSTASH_REDIS_REST_TOKEN: <your Upstash Redis REST token>
 ```
@@ -85,6 +86,8 @@ And, just once, you need to register you connection metadata schema. In a new wi
 $ npm run register
 ```
 
+You can also register it from the running web app. Set `REGISTER_ADMIN_SECRET` in your environment, visit `/admin/metadata-schema`, enter that admin key, and submit the form. This uses the same Discord API call as `npm run register`.
+
 ## Deploying to Vercel
 
 This project runs on Vercel as a Node.js Serverless Function. The Hono app is exported through `api/index.ts`, and `vercel.json` routes the public app paths to that function so Discord can call `/linked-role`, `/discord-oauth-callback`, and `/update-metadata` without an `/api` prefix.
@@ -99,6 +102,7 @@ DISCORD_CLIENT_SECRET=<your OAuth2 client secret>
 DISCORD_TOKEN=<your bot token>
 DISCORD_REDIRECT_URI=https://<your-vercel-domain>/discord-oauth-callback
 COOKIE_SECRET=<random generated UUID>
+REGISTER_ADMIN_SECRET=<random admin key for browser-based metadata registration>
 UPSTASH_REDIS_REST_URL=<your Upstash Redis REST URL>
 UPSTASH_REDIS_REST_TOKEN=<your Upstash Redis REST token>
 ```
@@ -106,7 +110,9 @@ UPSTASH_REDIS_REST_TOKEN=<your Upstash Redis REST token>
 4. In the Discord Developer Portal, set the Linked Roles Verification URL to `https://<your-vercel-domain>/linked-role`.
 5. In the OAuth2 settings, add `https://<your-vercel-domain>/discord-oauth-callback` as a redirect URI.
 6. Deploy the project. No build command is required.
-7. Run the metadata registration once with the same environment variables available:
+7. Register the metadata schema once from `https://<your-vercel-domain>/admin/metadata-schema` using `REGISTER_ADMIN_SECRET`.
+
+You can also run the metadata registration with the same environment variables available:
 
 ```
 npm run register

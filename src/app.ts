@@ -10,6 +10,43 @@ const app = new Hono();
 
 app.get('/', (c) => c.text('OK'));
 
+app.get('/admin/metadata-schema', (c) => {
+  const status = config.REGISTER_ADMIN_SECRET ? 200 : 503;
+  return c.html(renderMetadataSchemaPage(config.REGISTER_ADMIN_SECRET
+    ? {}
+    : { error: 'REGISTER_ADMIN_SECRET is not configured.' }), status);
+});
+
+app.post('/admin/metadata-schema', async (c) => {
+  try {
+    if (!config.REGISTER_ADMIN_SECRET) {
+      return c.html(renderMetadataSchemaPage({
+        error: 'REGISTER_ADMIN_SECRET is not configured.',
+      }), 503);
+    }
+
+    const body = await c.req.parseBody();
+    const adminSecret = body.adminSecret;
+
+    if (typeof adminSecret !== 'string' || adminSecret !== config.REGISTER_ADMIN_SECRET) {
+      return c.html(renderMetadataSchemaPage({
+        error: 'Invalid admin key.',
+      }), 403);
+    }
+
+    const result = await discord.registerMetadataSchema();
+    return c.html(renderMetadataSchemaPage({
+      result,
+      success: 'Metadata schema registered with Discord.',
+    }));
+  } catch (e) {
+    console.error(e);
+    return c.html(renderMetadataSchemaPage({
+      error: e instanceof Error ? e.message : 'Internal Server Error',
+    }), 500);
+  }
+});
+
 /**
  * Route configured in the Discord developer console which facilitates the
  * connection between Discord and any additional services you may use.
@@ -117,6 +154,225 @@ function getRedirectUri(c: Context) {
   const redirectUri = `${proto}://${host}/discord-oauth-callback`;
   console.warn(`DISCORD_REDIRECT_URI is not set; using request-derived redirect URI: ${redirectUri}`);
   return redirectUri;
+}
+
+function renderMetadataSchemaPage(options: {
+  error?: string;
+  result?: unknown;
+  success?: string;
+} = {}) {
+  const schemaRows = discord.metadataSchema.map((record) => `
+        <tr>
+          <td>${escapeHtml(record.key)}</td>
+          <td>${escapeHtml(record.name)}</td>
+          <td>${escapeHtml(record.description)}</td>
+          <td>${record.type}</td>
+        </tr>
+  `).join('');
+  const resultJson = options.result
+    ? JSON.stringify(options.result, null, 2)
+    : '';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register Discord Metadata Schema</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      body {
+        margin: 0;
+        background: #f6f7f9;
+        color: #1f2328;
+      }
+
+      main {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 48px 20px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.8rem, 4vw, 2.5rem);
+        line-height: 1.1;
+      }
+
+      p {
+        margin: 0 0 24px;
+        color: #59636e;
+      }
+
+      section {
+        margin-top: 28px;
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+        max-width: 420px;
+      }
+
+      label {
+        font-weight: 650;
+      }
+
+      input {
+        min-height: 42px;
+        border: 1px solid #c9d1d9;
+        border-radius: 6px;
+        padding: 0 12px;
+        font: inherit;
+      }
+
+      button {
+        min-height: 42px;
+        border: 0;
+        border-radius: 6px;
+        background: #5865f2;
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+      }
+
+      button:focus,
+      input:focus {
+        outline: 3px solid #99a2ff;
+        outline-offset: 2px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid #d8dee4;
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: #59636e;
+        font-size: 0.9rem;
+      }
+
+      .notice {
+        border-radius: 6px;
+        margin: 0 0 18px;
+        padding: 12px 14px;
+      }
+
+      .error {
+        background: #ffebe9;
+        color: #82071e;
+      }
+
+      .success {
+        background: #dafbe1;
+        color: #116329;
+      }
+
+      pre {
+        overflow: auto;
+        border-radius: 6px;
+        background: #24292f;
+        color: #f6f8fa;
+        padding: 14px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0d1117;
+          color: #f0f6fc;
+        }
+
+        p,
+        th {
+          color: #8b949e;
+        }
+
+        table {
+          background: #161b22;
+        }
+
+        th,
+        td {
+          border-color: #30363d;
+        }
+
+        input {
+          background: #0d1117;
+          border-color: #30363d;
+          color: #f0f6fc;
+        }
+
+        .error {
+          background: #490202;
+          color: #ffdcd7;
+        }
+
+        .success {
+          background: #033a16;
+          color: #acf2bd;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Register Discord Metadata Schema</h1>
+      <p>Push the configured linked role metadata fields to Discord.</p>
+
+      ${options.error ? `<div class="notice error">${escapeHtml(options.error)}</div>` : ''}
+      ${options.success ? `<div class="notice success">${escapeHtml(options.success)}</div>` : ''}
+
+      <form method="post" action="/admin/metadata-schema">
+        <label for="adminSecret">Admin key</label>
+        <input id="adminSecret" name="adminSecret" type="password" autocomplete="current-password" required>
+        <button type="submit">Register schema</button>
+      </form>
+
+      <section>
+        <h2>Schema</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${schemaRows}
+          </tbody>
+        </table>
+      </section>
+
+      ${resultJson ? `<section><h2>Discord response</h2><pre>${escapeHtml(resultJson)}</pre></section>` : ''}
+    </main>
+  </body>
+</html>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 export { updateMetadata };

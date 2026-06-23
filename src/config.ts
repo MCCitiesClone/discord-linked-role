@@ -12,6 +12,7 @@ const config = {
   DISCORD_CLIENT_SECRET: process.env.DISCORD_CLIENT_SECRET,
   DISCORD_REDIRECT_URI: process.env.DISCORD_REDIRECT_URI,
   COOKIE_SECRET: process.env.COOKIE_SECRET,
+  REGISTER_ADMIN_SECRET: process.env.REGISTER_ADMIN_SECRET,
 };
 
 export default config;
